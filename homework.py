@@ -1,16 +1,16 @@
-import logging, sys
+import logging
 import os
-import requests
+import sys
 import time
-import datetime
-from dotenv import load_dotenv
-from pprint import pprint
+from http import HTTPStatus
+from typing import Dict, List
+
+import requests
 import telegram
+from dotenv import load_dotenv
+from telegram import Bot
 
-# from logging import StreamHandler
-# from telegram import Bot, ReplyKeyboardMarkup
-# from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
-
+import exceptions
 
 load_dotenv()
 
@@ -20,7 +20,7 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 RETRY_TIME = 600
-ENDPOINT = 'https://practdicum.yandex.ru/api/user_api/homework_statuses/'
+ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 
@@ -50,80 +50,107 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
 
-def send_message(bot, message):
+def send_message(bot: Bot, message: str) -> None:
     """Sending a message."""
-    bot.send_message(TELEGRAM_CHAT_ID, message)
-    logger.info('Сообщение отправлено')
+    try:
+        bot.send_message(TELEGRAM_CHAT_ID, message)
+    except Exception as error:
+        logger.error(f'Сообщение не отправлено: {error}')
+    else:
+        logger.info(f'Отправлено сообщение: "{message}"')
 
 
-def get_api_answer(current_timestamp):
+def get_api_answer(current_timestamp: int) -> Dict:
     """API service endpoint request."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
-    try:
-        homework_statuses = requests.get(
-            ENDPOINT, headers=HEADERS, params=params
+    homework_statuses = requests.get(
+        ENDPOINT, headers=HEADERS, params=params
+    )
+    if homework_statuses.status_code == HTTPStatus.NOT_FOUND:
+        raise exceptions.APIError(
+            f'Недоступен Эндпоинт {ENDPOINT}'
         )
-    except Exception as error:
-        logging.error(f'Ошибка при запросе к  API: {error}')
+    if homework_statuses.status_code != HTTPStatus.OK:
+        raise exceptions.APIError(
+            f'Проблемы с Эндпоинтом {ENDPOINT}'
+        )
     return homework_statuses.json()
 
 
-def check_response(response):
+def check_response(response: Dict) -> List:
     """API response validation."""
-    try:
-        homeworks = response.get('homeworks')
-    except Exception as error:
-        logging.error(f'Ответ API не соответствует ожиданиям: {error}')
-        homeworks = None
+    if type(response) != dict:
+        raise TypeError('В ответе API отсутсвует словарь')
+    if not response:
+        raise exceptions.EmptyDict('В ответе API пустой словарь')
+    if 'homeworks' not in response:
+        raise exceptions.KeyNotExists('В словаре отсутствует ключ homeworks')
+    homeworks = response.get('homeworks')
+    if type(homeworks) != list:
+        raise TypeError('Домашки не в виде списка')
     return homeworks
 
 
-def parse_status(homework):
+def parse_status(homework: Dict) -> str:
     """Receipt homework status."""
     homework_name = homework['homework_name']
+    if 'status' not in homework:
+        raise exceptions.KeyNotExists(
+            'В словаре отсутствует ключ status'
+        )
     homework_status = homework['status']
+    if homework_status not in HOMEWORK_STATUSES:
+        raise exceptions.KeyNotExists(
+            'Недокументированный статус домашней работы'
+        )
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
-# pprint(check_response(get_api_answer(1)))
-# www = check_response(get_api_answer(1))[4]
-# print(parse_status(www))
-
-
-def check_tokens():
+def check_tokens() -> bool:
     """Checking the availability of environment variables."""
     if (PRACTICUM_TOKEN is None or TELEGRAM_TOKEN is None
             or TELEGRAM_CHAT_ID is None):
+        message = 'Отсутствует одна из переменных окружения'
+        logger.critical(message)
         return False
     return True
 
 
-def main():
+def main() -> None:
     """Main logic of the bot."""
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    # current_timestamp = int(time.time())
-    current_timestamp = int(datetime.datetime(2022, 4, 1).timestamp())
+    current_timestamp = int(time.time())
+    previous_message = ''
 
-    while check_tokens():
+    while True:
         try:
+            if check_tokens() is False:
+                raise exceptions.HasNoTokens(
+                    'Отсутствует переменная окружения!'
+                )
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
+
             if(homeworks):
                 for homework in homeworks:
                     send_message(bot, parse_status(homework))
-            current_timestamp = int(time.time())
-            time.sleep(RETRY_TIME)
-            print(current_timestamp)
+            else:
+                logger.debug('Новые статусы отсутствуют')
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            logging.error(message)
-            send_message(bot, message)
+            logger.error(message)
+            if message != previous_message:
+                send_message(bot, message)
+            previous_message = message
+
+        else:
+            current_timestamp = int(time.time())
+
+        finally:
             time.sleep(RETRY_TIME)
-    #     else:
-    # #         ...
 
 
 if __name__ == '__main__':
