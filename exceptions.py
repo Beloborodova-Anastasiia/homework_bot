@@ -16,7 +16,7 @@ class EmptyDict(Exception):
     pass
 
 
-class KeyNotExists(Exception):
+class KeyError(Exception):
     """Key not exists in the dictionary."""
 
     pass
