@@ -25,6 +25,7 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
+
 logging.basicConfig(
     level=logging.DEBUG,
     filename='main.log',

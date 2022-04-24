@@ -8,24 +8,27 @@ import telegram
 from telegram import Bot
 
 import exceptions
-import settings as st
+import settings
 
 JsonType = Dict[str, Any]
 
 
-PRACTICUM_TOKEN = st.PRACTICUM_TOKEN
-TELEGRAM_TOKEN = st.TELEGRAM_TOKEN
-TELEGRAM_CHAT_ID = st.TELEGRAM_CHAT_ID
-HEADERS = st.HEADERS
+PRACTICUM_TOKEN = settings.PRACTICUM_TOKEN
+TELEGRAM_TOKEN = settings.TELEGRAM_TOKEN
+TELEGRAM_CHAT_ID = settings.TELEGRAM_CHAT_ID
+HEADERS = settings.HEADERS
+
+
+logger = logging.getLogger(__name__)
 
 
 def send_message(bot: Bot, message: str) -> None:
     """Sending a message."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        st.logger.info(f'Отправлено сообщение: "{message}"')
+        settings.logger.info(f'Отправлено сообщение: "{message}"')
     except Exception as error:
-        st.logger.error(f'Сообщение не отправлено: {error}')
+        settings.logger.error(f'Сообщение не отправлено: {error}')
 
 
 def get_api_answer(current_timestamp: int) -> JsonType:
@@ -34,17 +37,17 @@ def get_api_answer(current_timestamp: int) -> JsonType:
     params = {'from_date': timestamp}
     try:
         homework_statuses = requests.get(
-            st.ENDPOINT, headers=HEADERS, params=params
+            settings.ENDPOINT, headers=HEADERS, params=params
         )
         homework_statuses.raise_for_status()
     except Exception as error:
         if homework_statuses.status_code == HTTPStatus.NOT_FOUND:
             raise exceptions.APIError(
-                f'Недоступен Эндпоинт {st.ENDPOINT}: {error}'
+                f'Недоступен Эндпоинт {settings.ENDPOINT}: {error}'
             )
         if homework_statuses.status_code != HTTPStatus.OK:
             raise exceptions.APIError(
-                f'Проблемы с Эндпоинтом {st.ENDPOINT}: {error}'
+                f'Проблемы с Эндпоинтом {settings.ENDPOINT}: {error}'
             )
     return homework_statuses.json()
 
@@ -52,7 +55,9 @@ def get_api_answer(current_timestamp: int) -> JsonType:
 def check_response(response: JsonType) -> List:
     """API response validation."""
     if type(response) != dict:
-        raise TypeError('В ответе API отсутсвует словарь')
+        raise TypeError(
+            f'В ответе API отсутствует словарь: response == {response}'
+        )
     if not response:
         raise exceptions.EmptyDict('В ответе API пустой словарь')
     if 'homeworks' not in response.keys():
@@ -74,12 +79,12 @@ def parse_status(homework: Dict) -> str:
             'В словаре отсутствует ключ status'
         )
     homework_status = homework.get('status')
-    if homework_status not in st.HOMEWORK_STATUSES.keys():
+    if homework_status not in settings.HOMEWORK_STATUSES.keys():
         raise KeyError(
             'Недокументированный статус домашней работы'
         )
     homework_name = homework.get('homework_name')
-    verdict = st.HOMEWORK_STATUSES[homework_status]
+    verdict = settings.HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -88,7 +93,7 @@ def check_tokens() -> bool:
     if (PRACTICUM_TOKEN is None or TELEGRAM_TOKEN is None
             or TELEGRAM_CHAT_ID is None):
         message = 'Отсутствует одна из переменных окружения'
-        st.logger.critical(message)
+        settings.logger.critical(message)
         return False
     return True
 
@@ -97,7 +102,6 @@ def main() -> None:
     """Main logic of the bot."""
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     previous_message = ''
-
     while True:
         try:
             if check_tokens() is False:
@@ -111,17 +115,17 @@ def main() -> None:
                 for homework in homeworks:
                     send_message(bot, parse_status(homework))
             else:
-                st.logger.debug('Новые статусы отсутствуют')
+                settings.logger.debug('Новые статусы отсутствуют')
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            st.logger.error(message)
+            settings.logger.error(message)
             if message != previous_message:
                 send_message(bot, message)
             previous_message = message
 
         finally:
-            time.sleep(st.RETRY_TIME)
+            time.sleep(settings.RETRY_TIME)
 
 
 if __name__ == '__main__':
