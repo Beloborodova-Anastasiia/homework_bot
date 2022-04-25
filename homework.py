@@ -1,7 +1,7 @@
 import logging
 import time
 from http import HTTPStatus
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import requests
 import telegram
@@ -9,9 +9,7 @@ from telegram import Bot
 
 import exceptions
 import settings
-
-JsonType = Dict[str, Any]
-
+from userstypes import JsonType
 
 PRACTICUM_TOKEN = settings.PRACTICUM_TOKEN
 TELEGRAM_TOKEN = settings.TELEGRAM_TOKEN
