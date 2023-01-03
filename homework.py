@@ -3,12 +3,11 @@ import time
 from http import HTTPStatus
 from typing import Dict, List
 
+import exceptions
 import requests
+import settings
 import telegram
 from telegram import Bot
-
-import exceptions
-import settings
 from userstypes import JsonType
 
 PRACTICUM_TOKEN = settings.PRACTICUM_TOKEN
