@@ -14,6 +14,7 @@ Python telegram bot for tracking homework's statuses. It tracks Yandex Practicum
 ### Technologies
 
 Python 3.7
+
 python-telegram-bot 13.7
 
 ### Local project run:
