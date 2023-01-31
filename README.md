@@ -33,7 +33,7 @@ Cоздать и активировать виртуальное окружен�
 
 ```
 для Mac или Linux:
-python3 -m venv env
+python3 -m venv venv
 source venv/bin/activate
 ```
 ```
