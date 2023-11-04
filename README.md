@@ -79,7 +79,3 @@ python homework.py
 ### Author
 
 Anastasiia Beloborodova  
-
-beloborodova.anastasiia@yandex.ru
-
-anastasiia.beloborodova@gmail.com
